@@ -9,9 +9,8 @@ if getattr(sys, 'frozen', False):
     if base_dir not in sys.path:
         sys.path.insert(0, base_dir)
 else:
-    # In development mode, up one level from 'mcp' folder to 'server'
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    base_dir = os.path.dirname(current_dir)
+    # In development mode, mcp_server.py is at paracore-agent root
+    base_dir = os.path.dirname(os.path.abspath(__file__))
     if base_dir not in sys.path:
         sys.path.insert(0, base_dir)
 
@@ -21,9 +20,8 @@ def _get_resource_path(filename: str) -> str:
         # PyInstaller extracts --add-data files into sys._MEIPASS
         return os.path.join(sys._MEIPASS, filename)
     else:
-        # Dev mode: up 4 levels from mcp_server.py to Paracore repo root
-        repo_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-        return os.path.join(repo_root, filename)
+        # Dev mode: docs are alongside mcp_server.py in paracore-agent root
+        return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
 
 import json
 import logging
