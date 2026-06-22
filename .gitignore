@@ -20,3 +20,4 @@ build/
 *.spec
 *.exe
 *.log
+version-info.txt
