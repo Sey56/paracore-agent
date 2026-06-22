@@ -1,5 +1,23 @@
 # Complete Method Catalog
 
+## Common Query Patterns — READ THIS FIRST
+
+These are the patterns for "X per Y" queries. Memorize them.
+
+| Goal | Method | Returns |
+|---|---|---|
+| Count per group | `.GroupByParam("Level").Table()` | Table: Group \| Count |
+| Sum per group | `.GroupByParam("Level", "Area", "m2").Table()` | Table: Group \| Count \| Total |
+| Grand total | `.SumParam("Area", "m2")` | A single double — NOT a table |
+| Filter then count | `.WhereParam("Level", "Level 1").Count()` | An integer |
+| Group, then filter groups | `.GroupByParam("Level").Where("Count", ">", 5).Table()` | Table: Group \| Count (filtered) |
+
+**CRITICAL:** `.SumParam(valueParam, unit)` returns ONE NUMBER (grand total across ALL elements). It does NOT group. For per-group sums, use the 3-argument `.GroupByParam(groupBy, valueParam, unit)` — this groups AND sums in one shot.
+
+**CRITICAL:** After `.GroupByParam()`, you can ONLY chain `.Table()`, `.BarGraph()`, `.PieGraph()`, `.LineGraph()`, or `.Where()`. You CANNOT chain `.WhereParam()`, `.Select()`, `.SumParam()`, or `.Count()` — GroupByParam returns grouped data objects, not Revit elements.
+
+**CRITICAL:** `.Where()` after `.GroupByParam()` takes column names as strings: `.Where("Count", ">", 5)`. Do NOT use `.WhereParam()` after `.GroupByParam()`.
+
 ## Parameters & Units
 
 ```
@@ -135,11 +153,14 @@ Transact("Place Column", () => {
   internally. For native properties (Location, Area, Volume) or computed values
   (coordinates), use LINQ .GroupBy(lambda) instead — it falls under "Allowed LINQ".
   
-  ⚠️  GroupByParam returns GROUPED DATA, not elements. You CANNOT chain
-  .Where(), .Select(), .Count(), or .Peek() after it. Only chain .Table(),
-  .BarGraph(), .PieGraph(), or .LineGraph() directly.
+      ⚠️  GroupByParam returns GROUPED DATA, not elements. You CANNOT chain
+      .WhereParam(), .Select(), .SumParam(), or .Peek() after it. Only chain:
+      .Table(), .BarGraph(), .PieGraph(), .LineGraph(), or .Where("Col", "op", val).
 
-.SumParam("Name", "m2")
+.SumParam(valueParam, unit)            → single double (GRAND TOTAL across ALL elements)
+  e.g. GetElements("Rooms").SumParam("Area", "m2") → 15805.89
+  Does NOT group. Returns a NUMBER, not a table.
+  For per-group sums, use .GroupByParam(groupBy, sumParam, unit) instead.
 .SetParam("Comments","Done") [bulk, 1 txn]
 .Delete() [BIM-safe bulk]
 .Hide()  .Unhide()  .Isolate()
