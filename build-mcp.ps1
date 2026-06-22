@@ -17,7 +17,7 @@ if (-not $Version) {
 $mcpName = "paracore-mcp"
 $description = "Paracore-MCP"
 
-Write-Host "--- Building $description ---" -ForegroundColor Cyan
+Write-Host "--- Building $description v$Version ---" -ForegroundColor Cyan
 Write-Host "  Output: $mcpName.exe" -ForegroundColor Cyan
 
 $AgentRoot = $PSScriptRoot
@@ -35,10 +35,42 @@ if ($LASTEXITCODE -ne 0) {
 $BuildPython = Join-Path $BuildProjectDir ".venv\Scripts\python.exe"
 Pop-Location
 
-# 2. Build the executable
+# 2. Generate Windows version info file
+$vParts = $Version -split '\.'
+$vMajor, $vMinor, $vPatch = [int]$vParts[0], [int]$vParts[1], [int]$vParts[2]
+$VersionFile = Join-Path $AgentRoot "version-info.txt"
+@"
+# UTF-8
+VSVersionInfo(
+  ffi=FixedFileInfo(
+    filevers=($vMajor, $vMinor, $vPatch, 0),
+    prodvers=($vMajor, $vMinor, $vPatch, 0),
+    mask=0x3f, flags=0x0, OS=0x40004, fileType=0x1, subtype=0x0, date=(0,0)
+  ),
+  kids=[
+    StringFileInfo([
+      StringTable(u'040904B0', [
+        StringStruct(u'CompanyName', u'Paracore'),
+        StringStruct(u'FileDescription', u'Paracore MCP Server'),
+        StringStruct(u'FileVersion', u'$Version'),
+        StringStruct(u'InternalName', u'$mcpName'),
+        StringStruct(u'LegalCopyright', u'MIT License'),
+        StringStruct(u'OriginalFilename', u'$mcpName.exe'),
+        StringStruct(u'ProductName', u'Paracore MCP'),
+        StringStruct(u'ProductVersion', u'$Version')
+      ])
+    ]),
+    VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
+  ]
+)
+"@ | Set-Content $VersionFile -Encoding UTF8
+Write-Host "  Version info: $Version" -ForegroundColor DarkGray
+
+# 3. Build the executable
 Write-Host "Compiling mcp_server.py into standalone executable..." -ForegroundColor Yellow
 Push-Location $AgentRoot
 & $BuildPython -m PyInstaller --onefile --name $mcpName --paths . `
+    --version-file $VersionFile `
     --exclude-module logfire `
     --hidden-import mcp `
     --hidden-import mcp.server.fastmcp `
@@ -61,13 +93,13 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
-# 3. PyInstaller outputs to dist/ directly (we're running from $AgentRoot)
+# 4. PyInstaller outputs to dist/ directly (we're running from $AgentRoot)
 $ExePath = Join-Path $AgentRoot "dist\$mcpName.exe"
 
 Write-Host "--- PyInstaller Build Complete! ---" -ForegroundColor Green
 Write-Host "Executable: $ExePath" -ForegroundColor Green
 
-# ── 4. (Optional) Build Windows installer via Inno Setup ─────────────────
+# ── 5. (Optional) Build Windows installer via Inno Setup ─────────────────
 if ($Installer) {
     $ISCC = $null
     $candidates = @(
