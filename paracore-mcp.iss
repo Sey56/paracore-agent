@@ -34,6 +34,7 @@ OutputBaseFilename={#OutputBase}
 
 Compression=lzma2/ultra64
 SolidCompression=yes
+WizardStyle=modern
 
 ; Per-user install under %APPDATA% — Claude Desktop looks here for MCP servers
 DefaultDirName={userappdata}\paracore-data\mcp-servers
