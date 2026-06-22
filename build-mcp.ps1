@@ -50,18 +50,11 @@ if ($LASTEXITCODE -ne 0) {
 }
 Pop-Location
 
-# 3. Move to dist/
-$DistDir = Join-Path $AgentRoot "dist"
-if (!(Test-Path $DistDir)) { New-Item -ItemType Directory -Path $DistDir | Out-Null }
-
+# 3. PyInstaller outputs to dist/ directly (we're running from $AgentRoot)
 $ExePath = Join-Path $AgentRoot "dist\$mcpName.exe"
-$DestPath = Join-Path $DistDir "$mcpName.exe"
-
-Write-Host "Copying executable to dist/..." -ForegroundColor Yellow
-Copy-Item -Path $ExePath -Destination $DestPath -Force
 
 Write-Host "--- PyInstaller Build Complete! ---" -ForegroundColor Green
-Write-Host "Executable: $DestPath" -ForegroundColor Green
+Write-Host "Executable: $ExePath" -ForegroundColor Green
 
 # ── 4. (Optional) Build Windows installer via Inno Setup ─────────────────
 if ($Installer) {
