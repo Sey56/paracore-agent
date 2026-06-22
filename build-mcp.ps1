@@ -135,7 +135,7 @@ if ($Installer) {
     }
     else {
         Push-Location $InstallersDir
-        & $ISCC -D"MCPName=mcp" -D"MCPTitle=Paracore-MCP" -D"Version=$Version" -D"IconPath=$IconFile" "-O$InstallersDir" $IssFile
+        & $ISCC /DMCPName=mcp /DMCPTitle="Paracore-MCP" /DVersion=$Version /DIconPath=$IconFile "/O$InstallersDir" $IssFile
         $issExit = $LASTEXITCODE
         Pop-Location
 
