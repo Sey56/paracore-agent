@@ -1,6 +1,6 @@
 [project]
 name = "paracore-agent"
-version = "1.0.0"
+version = "4.7.0"
 description = "Paracore AI brain — in-app agent, generalist MCP, and shared MCP core for Revit automation."
 license = "MIT"
 requires-python = ">=3.12"
@@ -22,4 +22,4 @@ dev = [
 ]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "4.7.0"
