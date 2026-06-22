@@ -1,7 +1,18 @@
 param(
     [switch]$Installer = $false,
-    [string]$Version = "4.6.0"
+    [string]$Version = ""
 )
+
+# Read version from VERSION file if not explicitly provided
+if (-not $Version) {
+    $VersionFile = Join-Path $PSScriptRoot "VERSION"
+    if (Test-Path $VersionFile) {
+        $Version = (Get-Content $VersionFile).Trim()
+    } else {
+        Write-Host "ERROR: VERSION file not found and no -Version specified." -ForegroundColor Red
+        exit 1
+    }
+}
 
 $mcpName = "paracore-mcp"
 $description = "Paracore-MCP"
