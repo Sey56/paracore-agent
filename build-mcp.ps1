@@ -134,8 +134,9 @@ if ($Installer) {
         exit 1
     }
     else {
-        Push-Location $InstallersDir
-        & $ISCC /DMCPName=mcp /DMCPTitle="Paracore-MCP" /DVersion=$Version /DIconPath=$IconFile "/O$InstallersDir" $IssFile
+        # Run ISCC from repo root (like free addin build does)
+        Push-Location $AgentRoot
+        & $ISCC "/dMCPName=mcp" "/dMCPTitle=Paracore-MCP" "/dVersion=$Version" "/dIconPath=$IconFile" "/O$InstallersDir" $IssFile
         $issExit = $LASTEXITCODE
         Pop-Location
 
