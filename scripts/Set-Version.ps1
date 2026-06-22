@@ -18,7 +18,7 @@ Write-Host "Updating paracore-agent to version $Version..." -ForegroundColor Cya
 $PyprojectPath = Join-Path $RootDir "pyproject.toml"
 if (Test-Path $PyprojectPath) {
     $content = Get-Content $PyprojectPath -Raw
-    $newContent = $content -replace 'version\s*=\s*"[^"]+"', "version = `"$Version`""
+    $newContent = $content -replace '^version\s*=\s*"[^"]+"', "version = `"$Version`""
     if ($content -ne $newContent) {
         $newContent | Set-Content $PyprojectPath -NoNewline
         Write-Host "Updated pyproject.toml"
