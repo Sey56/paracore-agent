@@ -1,0 +1,25 @@
+[project]
+name = "paracore-agent"
+version = "1.0.0"
+description = "Paracore AI brain — in-app agent, generalist MCP, and shared MCP core for Revit automation."
+license = "MIT"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.0.0",
+    "grpcio>=1.60",
+    "protobuf>=4.25",
+    "pydantic>=2.0",
+    "pydantic-ai>=0.0.20",
+    "fastapi>=0.100",
+    "httpx>=0.25",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.1",
+]
+
+[tool.ruff]
+target-version = "py312"

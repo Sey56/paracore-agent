@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+.python-version
+
+# IDE
+.vs/
+.vscode/
+.idea/
+.claude/
+
+# OS
+.DS_Store
+
+# Build
+dist/
+build/
+*.spec
+*.exe
+*.log
