@@ -68,9 +68,11 @@ Write-Host "  Version info: $Version" -ForegroundColor DarkGray
 
 # 3. Build the executable
 Write-Host "Compiling mcp_server.py into standalone executable..." -ForegroundColor Yellow
+$IconFile = Join-Path $AgentRoot "icons\$mcpName.ico"
 Push-Location $AgentRoot
 & $BuildPython -m PyInstaller --onefile --name $mcpName --paths . `
     --version-file $VersionFile `
+    --icon $IconFile `
     --exclude-module logfire `
     --hidden-import mcp `
     --hidden-import mcp.server.fastmcp `
