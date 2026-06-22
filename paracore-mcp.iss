@@ -39,7 +39,10 @@ SolidCompression=yes
 DefaultDirName={userappdata}\paracore-data\mcp-servers
 DisableDirPage=yes
 
-SetupIconFile=icons\paracore-mcp.ico
+#ifndef IconPath
+  #define IconPath "icons\paracore-mcp.ico"
+#endif
+SetupIconFile="{#IconPath}"
 PrivilegesRequired=lowest
 DisableProgramGroupPage=yes
 UninstallDisplayName={#MCPTitle} (Paracore MCP Server)

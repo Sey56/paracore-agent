@@ -17,8 +17,10 @@ if (-not $Version) {
 $mcpName = "paracore-mcp"
 $description = "Paracore-MCP"
 
-Write-Host "--- Building $description v$Version ---" -ForegroundColor Cyan
-Write-Host "  Output: $mcpName.exe" -ForegroundColor Cyan
+# ── Banner ────────────────────────────────────────────────────────────────
+Write-Host '=================================' -ForegroundColor Cyan
+Write-Host "  Building $description v$Version"
+Write-Host '=================================' -ForegroundColor Cyan
 
 $AgentRoot = $PSScriptRoot
 $BuildProjectDir = Join-Path $AgentRoot "mcp-build"
@@ -98,8 +100,11 @@ Pop-Location
 # 4. PyInstaller outputs to dist/ directly (we're running from $AgentRoot)
 $ExePath = Join-Path $AgentRoot "dist\$mcpName.exe"
 
-Write-Host "--- PyInstaller Build Complete! ---" -ForegroundColor Green
-Write-Host "Executable: $ExePath" -ForegroundColor Green
+Write-Host ''
+Write-Host '=================================' -ForegroundColor Green
+Write-Host "  $description v$Version — Build Complete"
+Write-Host '=================================' -ForegroundColor Green
+Write-Host "  Exe: $ExePath"
 
 # ── 5. (Optional) Build Windows installer via Inno Setup ─────────────────
 if ($Installer) {
@@ -130,7 +135,7 @@ if ($Installer) {
     }
     else {
         Push-Location $InstallersDir
-        & $ISCC -D"MCPName=mcp" -D"MCPTitle=Paracore-MCP" -D"Version=$Version" "-O$InstallersDir" $IssFile
+        & $ISCC -D"MCPName=mcp" -D"MCPTitle=Paracore-MCP" -D"Version=$Version" -D"IconPath=$IconFile" "-O$InstallersDir" $IssFile
         $issExit = $LASTEXITCODE
         Pop-Location
 
