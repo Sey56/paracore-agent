@@ -77,9 +77,11 @@ if ($Installer) {
     Write-Host "  Version:  $Version" -ForegroundColor DarkGray
 
     $InstallersDir = Join-Path $AgentRoot "installers"
+    if (!(Test-Path $InstallersDir)) { New-Item -ItemType Directory -Path $InstallersDir | Out-Null }
     $IssFile = Join-Path $AgentRoot "paracore-mcp.iss"
     if (-not (Test-Path $IssFile)) {
-        Write-Host "NOTE: No paracore-mcp.iss found — skipping installer. Copy from paracore-pro if needed." -ForegroundColor Yellow
+        Write-Host "ERROR: paracore-mcp.iss not found at $IssFile" -ForegroundColor Red
+        exit 1
     }
     else {
         Push-Location $InstallersDir
