@@ -18,17 +18,18 @@ grpc_client.py      gRPC communication with Paracore.Server / Paracore.Addin
 |---|---|---|
 | In-app agent | `paracore` | `agent/agent_router.py` (via FastAPI) |
 | Generalist MCP | (self) | `mcp_server.py` (built as .exe) |
-| TakeOff MCP | `paracore-pro` | `mcp_core/tools.py` (validate, handle_result) |
+| Specialized MCPs | domain-specific repos | `mcp_core/` — tools, validation, gRPC client |
 
 ## Development
 
-Clone alongside `paracore` and `paracore-pro`:
+Clone alongside `paracore`:
 
 ```
 Paracore/
 ├── paracore-agent/    ← this repo
-├── paracore/           ← desktop app + free addin
-└── paracore-pro/       ← specialized MCPs + commercial addin
+└── paracore/           ← desktop app + free addin
 ```
+
+Specialized MCP repos also consume `mcp_core/` from this repo.
 
 Each consumer adds this repo to `sys.path` at import time. No submodules, no pip install needed.
