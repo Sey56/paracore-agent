@@ -1,5 +1,5 @@
 param(
-    [switch]$Installer = $false,
+    
     [string]$Version = ""
 )
 
@@ -41,7 +41,7 @@ Pop-Location
 $vParts = $Version -split '\.'
 $vMajor, $vMinor, $vPatch = [int]$vParts[0], [int]$vParts[1], [int]$vParts[2]
 $VersionFile = Join-Path $AgentRoot "version-info.txt"
-@"
+$versionInfo = @"
 # UTF-8
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -65,7 +65,8 @@ VSVersionInfo(
     VarFileInfo([VarStruct(u'Translation', [1033, 1200])])
   ]
 )
-"@ | Set-Content $VersionFile -Encoding UTF8
+"@
+$versionInfo | Set-Content $VersionFile -Encoding UTF8
 Write-Host "  Version info: $Version" -ForegroundColor DarkGray
 
 # 3. Build the executable
@@ -107,7 +108,7 @@ Write-Host '=================================' -ForegroundColor Green
 Write-Host "  Exe: $ExePath"
 
 # ── 5. (Optional) Build Windows installer via Inno Setup ─────────────────
-if ($Installer) {
+if ($true) {
     $ISCC = $null
     $candidates = @(
         "${env:LOCALAPPDATA}\Programs\Inno Setup 6\ISCC.exe",
@@ -147,14 +148,4 @@ if ($Installer) {
 
         Write-Host "Installer built successfully!" -ForegroundColor Green
     }
-}
-else {
-    Write-Host ""
-    Write-Host "To build an installer: add -Installer" -ForegroundColor DarkGray
-    Write-Host "  ./build-mcp.ps1 -Installer" -ForegroundColor DarkGray
-    Write-Host ""
-    Write-Host "To install manually: copy $mcpName.exe to" -ForegroundColor Yellow
-    Write-Host "  %APPDATA%\paracore-data\mcp-servers\" -ForegroundColor Cyan
-    Write-Host "Then add to claude_desktop_config.json:" -ForegroundColor Yellow
-    Write-Host "  { ""command"": ""%APPDATA%\\paracore-data\\mcp-servers\\$mcpName.exe"", ""args"": [] }" -ForegroundColor Gray
 }

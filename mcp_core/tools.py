@@ -122,7 +122,10 @@ def execute_dynamic_query(
     Execute C# in Revit (read or modify). The user's final action.
     Results are summarized. SELF-CORRECTION: retry up to 3 times on errors.
 
-    BEFORE WRITING ANY C#: read paracore://system-prompt for the method catalog.
+    BEFORE WRITING ANY C#: call the read_extension_methods tool (NOT inside C# —
+    it's a separate MCP tool call) to look up method syntax. The catalog in your
+    system prompt already covers the most common methods; use this tool when you
+    need a specific method signature or an overload you don't recognize.
 
     WRITES: el.SetVal("Comments","Done"), el.SetNum("Offset",-150,"cm"),
     el.Delete(), el.Hide(), el.Unhide(), el.Isolate() — auto-transact.

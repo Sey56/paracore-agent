@@ -136,10 +136,16 @@ Transact("Place Column", () => {
 .WhereParam("Name", 200, "mm")
 .WhereParam("Name", ">", 25, "m2")
 .WhereMatches("pattern")
+.WhereMaterial("Concrete")        — filter BY material (substring match)
+.WhereMaterialNot("Default Wall") — exclude elements with this material
 .StandardDoor()
 .OrderByParam("Name")
 .OrderByParamDesc("Name")
 ```
+
+**Material filters** work on any element type. They check all material sources:
+geometry faces, paint, compound layers, and STRUCTURAL_MATERIAL_PARAM. Use
+`.WhereMaterialNot("Concrete")` to find structural elements with wrong material.
 
 ## Collection: Group, Write, UI
 
@@ -157,8 +163,11 @@ Transact("Place Column", () => {
       .WhereParam(), .Select(), .SumParam(), or .Peek() after it. Only chain:
       .Table(), .BarGraph(), .PieGraph(), .LineGraph(), or .Where("Col", "op", val).
 
-.SumParam(valueParam, unit)            → single double (GRAND TOTAL across ALL elements)
+.SumParam(valueParam, unit, decimals)         → single double (GRAND TOTAL across ALL elements)
+  Unit is OPTIONAL — inferred from param name (Volume→m3, Area→m2, Length→m).
+  Decimals defaults to 3.
   e.g. GetElements("Rooms").SumParam("Area", "m2") → 15805.89
+  e.g. GetElements("Columns").SumParam("Volume")   → 4.374 (m3 inferred)
   Does NOT group. Returns a NUMBER, not a table.
   For per-group sums, use .GroupByParam(groupBy, sumParam, unit) instead.
 .SetParam("Comments","Done") [bulk, 1 txn]
@@ -169,8 +178,13 @@ Transact("Place Column", () => {
 ## Visualization
 
 ```
-.Table()  .BarGraph()  .PieGraph()  .LineGraph()  .Show()
+.Table()     — interactive data grid (always safe after GroupByParam or Select)
+.BarGraph()  — bar chart (after GroupByParam with summed total)
+.PieGraph()  — pie chart (after GroupByParam with summed total)
+.LineGraph() — line chart
+.Show()      — zoom to elements in Revit view
 ```
+NOTE: `.Bar()` does NOT exist — use `.BarGraph()`.
 
 ### .Table() — When It's Safe
 
@@ -257,3 +271,83 @@ NEVER foreach+Println loops, NEVER string.Join for element Ids.
 
 **Note:** FilteredElementCollector, XYZ, Line.CreateBound, Wall.Create, ElementId, etc.
 are FULLY AVAILABLE everywhere. Use them for creation, geometry, and advanced queries.
+
+## TakeOff Methods — Paracore BIM Measurement Standard (v1.0)
+
+These are specialized quantity takeoff methods following the 7-Work-Group standard.
+Every quantity comes from actual model geometry — no estimation. All units metric.
+
+### Discovery (before Work Groups)
+
+| Method | Returns |
+|---|---|
+| `Doc.GetModelCategoryCounts().Table()` | Category \| Count — all model categories |
+| `Doc.GetLevels().Table()` | Name \| Elevation \| Id — all levels |
+| `GetElements("X").Limit(N).Table()` | Id \| Name \| Level \| Family_And_Type — first N elements |
+| `GetElements("X").GetCountsByType().Table()` | Family_And_Type \| Count — grouped by family type |
+
+### WG1 — Substructure
+
+| Method | Returns |
+|---|---|
+| `GetElements("Structural Foundations").GetExcavationQuantities().Table()` | Id, Family_And_Type, Foundation_Type, Level, Length_m, Width_mm, Depth_mm, Excavation_Volume, Working_Allowance |
+| `GetElements("Structural Foundations").GetConcreteQuantities().Table()` | Id, Family_And_Type, Category, Material, Level, Volume |
+
+### WG2 — RC Frame
+
+| Method | Returns |
+|---|---|
+| `GetElements("Structural Columns").GetConcreteQuantities().Table()` | Id, Family_And_Type, Category, Material, Level, Volume |
+| `Doc.GetConcreteSummary().Table()` | Material, Category, Total_Volume, Element_Count — all 6 structural cats |
+| `GetElements("Structural Rebar").GetRebarQuantities().Table()` | Id, Bar_Type, Style, Diameter, Quantity, Total_Length, Length_Per_Bar, Weight, Schedule_Mark, Host_Category, Host_Name, Distribution |
+| `Doc.GetRebarSummary().Table()` | Bar_Type, Style, Diameter, Total_Bars, Total_Length, Total_Weight |
+| `GetElements("Structural Columns").ComputeFormwork().Table()` | Id, Name, Level, Formwork_Type, Height_Band, Formwork — plus TOTAL row |
+
+### WG3 — Masonry
+
+| Method | Returns |
+|---|---|
+| `GetElements("Walls").GetMaterialQuantities().Table()` | Material, Family_And_Type, Total_Volume, Total_Area, Element_Count |
+| `GetElements("Walls").GetMaterialBreakdown().Table()` | ElementId, Element_Name, Material, Volume, Area |
+| `GetElements<WallType>().GetCompoundStructureLayers().Table()` | TypeName, LayerFunction, Material, Thickness |
+
+### WG4 — Openings
+
+| Method | Returns |
+|---|---|
+| `GetElements<FamilyInstance>("Doors").GetDoorSchedule().Table()` | Id, Mark, Family_And_Type, Level, Width, Height, Area, Fire_Rating, Thickness |
+| `GetElements<FamilyInstance>("Windows").GetWindowSchedule().Table()` | Id, Mark, Family_And_Type, Level, Width, Height, Area, Sill_Height |
+| `Doc.GetWallOpeningAreas().Table()` | Id, Family_And_Type, Category, Level, Host_Wall, Width, Height, Opening_Area_m2 |
+
+### WG5 — Finishes
+
+| Method | Returns |
+|---|---|
+| `GetElements("Walls").GetWallFinishAreas().Table()` | Id, Family_And_Type, Level, Finish_Area, Length, Height |
+| `GetElements("Floors").GetFloorFinishAreas().Table()` | Id, Family_And_Type, Level, Area, Thickness |
+| `Doc.GetFloorFinishSummary().Table()` | Family_And_Type, Level, Total_Area, Element_Count |
+| `GetElements<Room>().GetRoomData().Table()` | Id, Name, Number, Level, Area, Perimeter, Volume |
+
+### WG6 — Structural Steel
+
+| Method | Returns |
+|---|---|
+| `GetElements("Structural Framing").GetSteelTonnage().Table()` | Id, Family_And_Type, Section, Level, Length, Weight_Per_M, Weight |
+| `Doc.GetSteelTonnageSummary().Table()` | Section, Family_And_Type, Total_Length, Total_Weight, Element_Count |
+
+### WG7 — MEP
+
+| Method | Returns |
+|---|---|
+| `GetElements("Pipes").GetLinearQuantities("Pipework").Table()` | Id, Group, Category, Family_And_Type, Level, Diameter, Length |
+| `GetElements("Pipes").GetLinearSummary("Pipework").Table()` | Category, Family_And_Type, Level, Total_Length, Element_Count |
+
+### Cross-cutting
+
+| Method | Returns |
+|---|---|
+| `GetElements("X").GetQuantitiesByLevel().Table()` | Level, Element_Count, Total_Volume, Total_Area, Total_Length |
+
+**Important:** These methods require enterprise license. They are read-only.
+All volumes in m³, areas in m², lengths in m, weights in kg, dimensions in mm.
+Sum-then-round: elements summed in raw units, converted once, rounded once.
