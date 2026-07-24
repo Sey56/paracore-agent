@@ -21,3 +21,4 @@ build/
 *.exe
 *.log
 version-info.txt
+graphify-out/

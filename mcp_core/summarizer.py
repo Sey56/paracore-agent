@@ -4,10 +4,11 @@ from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-MAX_TABLE_ROWS = 200          # Cap for raw element dumps (100K+ rows). CombinedParams max ~200.
-MAX_TEXT_LINES = 30           # Cap for verbose text output
-SHOW_ALL_TABLE_THRESHOLD = 200 # Show ALL rows if total ≤ this — covers CombinedParams (up to ~200 rows)
-SHOW_ALL_TEXT_THRESHOLD = 40   # Show ALL lines if total ≤ this
+MAX_TABLE_ROWS = 50           # First N rows shown to agent for large tables
+TABLE_TAIL_ROWS = 2           # Last N rows preserved (often contain totals/summaries)
+MAX_TEXT_LINES = 20           # Cap for verbose text output shown to agent
+SHOW_ALL_TABLE_THRESHOLD = 50 # Show ALL rows if total ≤ this
+SHOW_ALL_TEXT_THRESHOLD = 20  # Show ALL lines if total ≤ this
 
 
 def _markdown_table(headers: List[str], rows: List[List[str]]) -> str:
@@ -61,11 +62,11 @@ def summarize(output_raw: Dict[str, Any]) -> str:
                     # Small table — show all rows, no truncation
                     shown = data
                 else:
-                    # Large table — show first N-2 rows + last 2 rows.
+                    # Large table — show first N rows + last few rows.
                     # The last rows often contain totals/summaries that must
                     # survive truncation (e.g. formwork grand total).
-                    head = data[:MAX_TABLE_ROWS - 2]
-                    tail = data[-2:]
+                    head = data[:MAX_TABLE_ROWS]
+                    tail = data[-TABLE_TAIL_ROWS:]
                     shown = head + tail
 
                 if headers:
@@ -75,8 +76,45 @@ def summarize(output_raw: Dict[str, Any]) -> str:
                     if total_rows <= SHOW_ALL_TABLE_THRESHOLD:
                         parts.append(f"{title_line}Table ({total_rows} rows):\n{table_md}")
                     else:
-                        parts.append(f"{title_line}Table — {total_rows} rows total (showing first {len(shown)}):\n{table_md}")
-                        parts.append(f"↳ {total_rows - MAX_TABLE_ROWS} more rows not shown (last 2 rows preserved). Narrow your query with .WhereParam() or .GroupByParam() for focused results.")
+                        # Compute aggregate totals only for quantity columns.
+                        # Only sum columns that are clearly aggregate quantities,
+                        # not dimensions or identifiers.
+                        SUM_KEYWORDS = {
+                            "area", "volume", "length", "weight", "mass", "count",
+                            "quantity", "total", "cost", "price", "tonnage",
+                            "amount", "perimeter", "girth",
+                        }
+                        numeric_cols = {}
+                        first_row = data[0]
+                        for h in headers:
+                            low = h.lower().strip()
+                            if not any(kw in low for kw in SUM_KEYWORDS):
+                                continue
+                            try:
+                                float(str(first_row.get(h, "")).replace(",", ""))
+                                numeric_cols[h] = 0.0
+                            except (ValueError, TypeError):
+                                pass
+                        if numeric_cols:
+                            for row in data:
+                                for h in numeric_cols:
+                                    try:
+                                        numeric_cols[h] += float(str(row.get(h, "")).replace(",", ""))
+                                    except (ValueError, TypeError):
+                                        pass
+                            total_parts = []
+                            for h in numeric_cols:
+                                v = f"{numeric_cols[h]:.2f}".rstrip('0').rstrip('.')
+                                total_parts.append(f"{h}: {v}")
+                            total_str = " | ".join(total_parts)
+                            parts.append(
+                                f"{title_line}Table — {total_rows} rows total "
+                                f"(showing first {MAX_TABLE_ROWS} + last {TABLE_TAIL_ROWS}):\n{table_md}\n"
+                                f"**Totals (all {total_rows} rows):** {total_str}"
+                            )
+                        else:
+                            parts.append(f"{title_line}Table — {total_rows} rows total (showing first {MAX_TABLE_ROWS} + last {TABLE_TAIL_ROWS}):\n{table_md}")
+                        parts.append(f"↳ {total_rows - len(shown)} more rows not shown. Narrow your query with .WhereParam() or .GroupByParam() for focused results.")
                 else:
                     parts.append(f"Table **{title}** has {total_rows} rows (data available in UI).")
 

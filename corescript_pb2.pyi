@@ -305,7 +305,7 @@ class GetStatusRequest(_message.Message):
     def __init__(self) -> None: ...
 
 class GetStatusResponse(_message.Message):
-    __slots__ = ("paracore_connected", "revit_open", "revit_version", "document_open", "document_title", "document_type", "revit_install_path", "addin_server_path")
+    __slots__ = ("paracore_connected", "revit_open", "revit_version", "document_open", "document_title", "document_type", "revit_install_path", "addin_server_path", "is_pro")
     PARACORE_CONNECTED_FIELD_NUMBER: _ClassVar[int]
     REVIT_OPEN_FIELD_NUMBER: _ClassVar[int]
     REVIT_VERSION_FIELD_NUMBER: _ClassVar[int]
@@ -314,6 +314,7 @@ class GetStatusResponse(_message.Message):
     DOCUMENT_TYPE_FIELD_NUMBER: _ClassVar[int]
     REVIT_INSTALL_PATH_FIELD_NUMBER: _ClassVar[int]
     ADDIN_SERVER_PATH_FIELD_NUMBER: _ClassVar[int]
+    IS_PRO_FIELD_NUMBER: _ClassVar[int]
     paracore_connected: bool
     revit_open: bool
     revit_version: str
@@ -322,7 +323,8 @@ class GetStatusResponse(_message.Message):
     document_type: str
     revit_install_path: str
     addin_server_path: str
-    def __init__(self, paracore_connected: bool = ..., revit_open: bool = ..., revit_version: _Optional[str] = ..., document_open: bool = ..., document_title: _Optional[str] = ..., document_type: _Optional[str] = ..., revit_install_path: _Optional[str] = ..., addin_server_path: _Optional[str] = ...) -> None: ...
+    is_pro: bool
+    def __init__(self, paracore_connected: bool = ..., revit_open: bool = ..., revit_version: _Optional[str] = ..., document_open: bool = ..., document_title: _Optional[str] = ..., document_type: _Optional[str] = ..., revit_install_path: _Optional[str] = ..., addin_server_path: _Optional[str] = ..., is_pro: bool = ...) -> None: ...
 
 class GetScriptMetadataRequest(_message.Message):
     __slots__ = ("script_files",)

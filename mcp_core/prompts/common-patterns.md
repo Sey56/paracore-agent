@@ -1,5 +1,29 @@
 # Common Patterns
 
+## CRITICAL: .Select() column naming rules
+
+When using `.Select()` to create named columns in a table:
+
+1. **Column names MUST match Revit parameter names** — replace spaces with underscores.
+   - `"Unconnected Height"` → `Unconnected_Height` (NOT `UnconnectedHeight_m`)
+   - `"Base Constraint"` → `Base_Constraint`
+   - `"Family And Type"` → `Family_And_Type`
+
+2. **NEVER add unit suffixes to column names** — the unit is in `GetNum(name, unit)`.
+   - ❌ `Length_m`, `Volume_m3`
+   - ✅ `Length`, `Volume`
+
+3. **The UI renders underscores as spaces** for display. CSV upload uses column names
+   to find Revit parameters — wrong names break editing.
+
+## When to aggregate vs. list rows
+
+- **User asks for totals/sums/averages** → use `.SumParam()` (one number)
+- **User asks "per level" or "by type"** → use `.GroupByParam()` (summary table)
+- **User asks for raw elements** → use `.Table()` with `.Take(N)` to limit rows
+- **Never list thousands of elements** — the summarizer caps at 22 rows and the
+  user won't see the full data. If a query might return >20 rows, add `.Take(20)`.
+
 ```csharp
 // Group and count
 GetElements("Doors").GroupByParam("Level").Table()

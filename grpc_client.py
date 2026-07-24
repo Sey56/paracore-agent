@@ -110,27 +110,22 @@ def register_watchdog_source(path: str, parameters_json: Optional[str] = None):
         }
 
 def get_status():
-    # logging.info("Attempting to get gRPC server status.")
     try:
         with get_corescript_runner_stub() as stub:
-            response = stub.GetStatus(corescript_pb2.GetStatusRequest())
-        
-        # Cache paths for scaffolding
-        if response.paracore_connected:
-            _revit_config.revit_install_path = response.revit_install_path
-            _revit_config.addin_server_path = response.addin_server_path
-            
-        return response
+            response = stub.GetStatus(corescript_pb2.GetStatusRequest(), timeout=2)
+            if response.paracore_connected:
+                _revit_config.revit_install_path = response.revit_install_path
+                _revit_config.addin_server_path = response.addin_server_path
+            return response
     except grpc.RpcError as e:
         if e.code() == grpc.StatusCode.UNAVAILABLE:
-            # Silently return a disconnected response instead of raising/logging
             close_channel()
             return corescript_pb2.GetStatusResponse(paracore_connected=False, revit_open=False)
         logging.error(format_grpc_error(e))
-        raise # Re-raise other gRPC errors
+        raise
     except Exception as e:
         logging.error(f"An unexpected error occurred during gRPC GetStatus call: {e}")
-        raise # Re-raise the unexpected error
+        raise
 
 def get_model_categories():
     """
@@ -160,7 +155,7 @@ def get_watchdog_statuses():
     """
     try:
         with get_corescript_runner_stub() as stub:
-            response = stub.GetWatchdogStatus(corescript_pb2.GetWatchdogStatusRequest())
+            response = stub.GetWatchdogStatus(corescript_pb2.GetWatchdogStatusRequest(), timeout=2)
             
             watchdogs = []
             for w in response.watchdogs:
