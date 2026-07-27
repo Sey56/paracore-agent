@@ -42,6 +42,7 @@ from mcp_core.tools import (
     get_globals,
     _SESSION,
 )
+from mcp_core.metrics import init as init_metrics
 
 def _get_skill_path(skill_name: str) -> str:
     """Resolve a skill directory path for both frozen and dev modes."""
@@ -70,6 +71,7 @@ logger = logging.getLogger("paracore-mcp")
 logger.setLevel(logging.INFO)
 logger.addHandler(_mcp_handler)
 logger.info(f"MCP Logging initialized at {log_file}")
+init_metrics(log_dir)
 
 # Initialize FastMCP Server
 # Server-level instructions: injected into LLM context on EVERY turn.

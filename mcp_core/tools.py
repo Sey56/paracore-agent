@@ -10,7 +10,9 @@ import, the module fails LOUD at import time — not silently at runtime.
 """
 
 import logging
+import time
 from grpc_client import execute_repl
+from mcp_core.metrics import record_tool_call
 
 # ── Security imports — MUST succeed ──────────────────────────────────────
 from mcp_core.tool_helpers import (
@@ -128,18 +130,27 @@ def explore_revit_data(
     .OrderByParam, .GroupByParam, .SumParam, .Table, etc.) instead of raw
     LINQ, FilteredElementCollector, LookupParameter, or foreach+Println.
     """
+    t0 = time.perf_counter()
     error = validate_csharp(csharp_code)
     if error:
+        record_tool_call("explore_revit_data", False, (time.perf_counter() - t0) * 1000,
+                         anti_pattern_blocked=True)
         return error
 
     param_warning = check_suspicious_param_names(csharp_code)
+    suspicious_count = 1 if param_warning else 0
     _SESSION.record_discovery()
     logger.info(f"Exploring Revit data: {justification}")
     try:
         result = execute_repl(csharp_code, session_id,
                               execution_mode="read_only", source=source)
+        duration_ms = (time.perf_counter() - t0) * 1000
+        record_tool_call("explore_revit_data", result.get("is_success", False),
+                         duration_ms, suspicious_params=suspicious_count)
         return param_warning + handle_execution_result(result)
     except Exception as e:
+        duration_ms = (time.perf_counter() - t0) * 1000
+        record_tool_call("explore_revit_data", False, duration_ms)
         logger.error(f"Exploration exception: {e}")
         return f"Error executing exploration script: {str(e)}"
 
@@ -170,18 +181,21 @@ def execute_dynamic_query(
     """
     import re
 
+    t0 = time.perf_counter()
     error = validate_csharp(csharp_code)
     if error:
+        record_tool_call("execute_dynamic_query", False, (time.perf_counter() - t0) * 1000,
+                         anti_pattern_blocked=True)
         return error
 
     param_warning = check_suspicious_param_names(csharp_code)
+    suspicious_count = 1 if param_warning else 0
     _SESSION.record_modification()
 
     # ── Workflow guard: warn if no discovery happened first ──────────────
     workflow_warning = _SESSION.workflow_warning()
 
     # ── Bulk write detection ─────────────────────────────────────────────
-    # Collection-level writes affect ALL filtered elements in one transaction.
     _BULK_PATTERNS = [
         (r'\.SetParam\s*\(',     '.SetParam() — bulk parameter write on ALL filtered elements'),
         (r'\.Delete\s*\(',       '.Delete() — bulk delete on ALL filtered elements'),
@@ -206,8 +220,15 @@ def execute_dynamic_query(
     logger.info(f"Executing dynamic query: {justification}")
     try:
         result = execute_repl(csharp_code, session_id, source=source)
+        duration_ms = (time.perf_counter() - t0) * 1000
+        record_tool_call("execute_dynamic_query", result.get("is_success", False),
+                         duration_ms, suspicious_params=suspicious_count,
+                         workflow_warning=bool(workflow_warning),
+                         bulk_write_detected=bool(bulk_warnings))
         return prefix + handle_execution_result(result)
     except Exception as e:
+        duration_ms = (time.perf_counter() - t0) * 1000
+        record_tool_call("execute_dynamic_query", False, duration_ms)
         logger.error(f"Execution exception: {e}")
         return prefix + f"Error executing task script: {str(e)}"
 
