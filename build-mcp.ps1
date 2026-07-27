@@ -87,8 +87,11 @@ Push-Location $AgentRoot
     --hidden-import google.protobuf.internal.builder `
     --hidden-import mcp_core `
     --hidden-import mcp_core.prompts `
+    --copy-metadata fastmcp `
     --add-data "REPL_GUIDE.md;." `
     --add-data "EXTENSION_METHODS.md;." `
+    --add-data "SKILLS.md;." `
+    --add-data "mcp_core/skills;mcp_core/skills" `
     mcp_server.py
 
 if ($LASTEXITCODE -ne 0) {

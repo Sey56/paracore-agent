@@ -1,18 +1,11 @@
 """
-Prompt Assembler — builds agent and MCP prompts from composable markdown files.
+Prompt Assembler — builds the MCP system prompt from composable markdown files.
 
-Single source of truth. All prompt content lives in agent/prompts/*.md.
+Single source of truth. All prompt content lives in mcp_core/prompts/*.md.
 The assembler reads these at import time and caches them in memory.
-
-Two consumers:
-  - "agent": In-app agent (PydanticAI). Gets identity, workflow, response-style, redundancy.
-  - "mcp":  MCP server (FastMCP). Gets identity + catalog. No workflow/response/redundancy.
 """
 
 import os
-from typing import Literal
-
-Consumer = Literal["agent", "mcp"]
 
 _PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
 
@@ -23,7 +16,7 @@ _PARACORE_FREE = os.path.normpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)), "..", "..", "paracore"))
 
 _cache: dict[str, str] = {}
-_full_prompt_cache: dict[Consumer, str] = {}
+_full_prompt_cache: str | None = None
 
 
 def _read(filename: str) -> str:
@@ -40,9 +33,9 @@ def _read(filename: str) -> str:
         return f"[Prompt file not found: {filename}]"
 
 
-# ── Shared sections (both agent and MCP) ──────────────────────────────────
+# ── Prompt sections (composed in order) ───────────────────────────────────
 
-_SHARED_SECTIONS = [
+_SECTIONS = [
     "identity.md",
     "globals.md",
     "script-rules.md",
@@ -55,28 +48,16 @@ _SHARED_SECTIONS = [
     "common-patterns.md",
 ]
 
-# ── Agent-only sections ───────────────────────────────────────────────────
 
-_AGENT_ONLY_SECTIONS = [
-    "redundancy.md",
-    "workflow.md",
-    "response-style.md",
-]
+def build_prompt() -> str:
+    """Build the full MCP system prompt from composable sections."""
+    global _full_prompt_cache
+    if _full_prompt_cache is not None:
+        return _full_prompt_cache
 
-
-def build_prompt(consumer: Consumer) -> str:
-    """Build the full system prompt for the given consumer type."""
-    if consumer in _full_prompt_cache:
-        return _full_prompt_cache[consumer]
-
-    sections = list(_SHARED_SECTIONS)
-
-    if consumer == "agent":
-        sections.extend(_AGENT_ONLY_SECTIONS)
-
-    parts = [_read(f) for f in sections]
+    parts = [_read(f) for f in _SECTIONS]
     prompt = "\n\n".join(parts)
-    _full_prompt_cache[consumer] = prompt
+    _full_prompt_cache = prompt
     return prompt
 
 
@@ -114,5 +95,6 @@ def get_section(name: str) -> str:
 
 def reload():
     """Clear caches so files are re-read on next access (useful for hot-reload)."""
+    global _full_prompt_cache
     _cache.clear()
-    _full_prompt_cache.clear()
+    _full_prompt_cache = None

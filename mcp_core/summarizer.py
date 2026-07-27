@@ -184,8 +184,8 @@ def _decode_pipeline(diags: List[int]) -> str:
         0 = empty result
        -1 = chart rendered
        -2 = table rendered
-       -3 = write succeeded (✓)
-       -4 = write failed (✗)
+       -3 = write succeeded
+       -4 = write failed
     """
     tokens: List[str] = []
     for d in diags:
@@ -198,9 +198,9 @@ def _decode_pipeline(diags: List[int]) -> str:
         elif d == _PIPE_TABLE:
             tokens.append("table rendered")
         elif d == _PIPE_WRITE_OK:
-            tokens.append("✓")
+            tokens.append("write-ok")
         elif d == _PIPE_WRITE_FAIL:
-            tokens.append("✗")
+            tokens.append("write-fail")
         else:
             tokens.append(str(d))
 

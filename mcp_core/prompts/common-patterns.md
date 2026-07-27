@@ -21,8 +21,8 @@ When using `.Select()` to create named columns in a table:
 - **User asks for totals/sums/averages** → use `.SumParam()` (one number)
 - **User asks "per level" or "by type"** → use `.GroupByParam()` (summary table)
 - **User asks for raw elements** → use `.Table()` with `.Take(N)` to limit rows
-- **Never list thousands of elements** — the summarizer caps at 22 rows and the
-  user won't see the full data. If a query might return >20 rows, add `.Take(20)`.
+- **Never list thousands of elements** — the summarizer caps at 50 rows and the
+  user won't see the full data. If a query might return >50 rows, add `.Take(50)`.
 
 ```csharp
 // Group and count

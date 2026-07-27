@@ -40,7 +40,15 @@ from mcp_core.tools import (
     search_schema,
     read_extension_methods,
     get_globals,
+    _SESSION,
 )
+
+def _get_skill_path(skill_name: str) -> str:
+    """Resolve a skill directory path for both frozen and dev modes."""
+    if getattr(sys, 'frozen', False):
+        return os.path.join(sys._MEIPASS, "mcp_core", "skills", skill_name)
+    else:
+        return os.path.join(base_dir, "mcp_core", "skills", skill_name)
 
 # Configure logging
 # Write to %APPDATA%\paracore-data\logs\ (created by Paracore add-in installer)
@@ -88,16 +96,27 @@ FORBIDDEN — these WILL fail:
   .AsString() / .AsDouble()          → use .GetStr() / .GetNum()
   Console.WriteLine()                → use Println()
 
+PARAMETER NAMES — NEVER GUESS:
+  Revit parameters ALWAYS use spaces: "Fire Rating" NOT "FireRating"
+  "Base Constraint" NOT "BaseConstraint", "Top Offset" NOT "TopOffset"
+  If you don't know the EXACT name, discover it first:
+    → _search_schema("Category")  for fast lookup
+    → .First().CombinedParams().Table()  for authoritative list
+  A mistyped name returns empty results — indistinguishable from "no matches."
+  You WILL report wrong answers if you guess. Never fabricate parameter names.
+
 START EVERY SESSION WITH:
-  1. _ping  → confirms connectivity + shows full cheat sheet
-  2. _read_extension_methods()  → loads complete method catalog
-  Then explore. Never write code before these two steps."""
+  1. ping  → confirms connectivity + shows full cheat sheet
+  2. Read paracore://skills  → skill catalog (which skills cover which operations)
+  3. Read the skill resources relevant to the user's request
+  4. Then explore. Never write code before reading the relevant skills."""
 )
 
 # Cache resource files in memory at startup (read once, serve from RAM)
 _CACHED_SYSTEM_PROMPT: str | None = None
 _CACHED_REPL_GUIDE: str | None = None
 _CACHED_EXTENSION_METHODS: str | None = None
+_CACHED_SKILLS: str | None = None
 
 
 def _load_resource(path: str, cache: str | None) -> str:
@@ -113,7 +132,8 @@ def _load_resource(path: str, cache: str | None) -> str:
 # Eagerly load resources at startup (prevent LLM from fetching full 32K docs at runtime)
 _CACHED_REPL_GUIDE = _load_resource(_get_resource_path("REPL_GUIDE.md"), None)
 _CACHED_EXTENSION_METHODS = _load_resource(_get_resource_path("EXTENSION_METHODS.md"), None)
-logger.info(f"MCP resources cached: REPL_GUIDE={len(_CACHED_REPL_GUIDE)} chars, EXTENSION_METHODS={len(_CACHED_EXTENSION_METHODS)} chars")
+_CACHED_SKILLS = _load_resource(_get_resource_path("SKILLS.md"), None)
+logger.info(f"MCP resources cached: REPL_GUIDE={len(_CACHED_REPL_GUIDE)} chars, EXTENSION_METHODS={len(_CACHED_EXTENSION_METHODS)} chars, SKILLS={len(_CACHED_SKILLS)} chars")
 
 @mcp.tool()
 def ping() -> str:
@@ -121,9 +141,10 @@ def ping() -> str:
     Verify the Paracore MCP server is alive and connected to Revit.
     Always call this first at the start of every session.
     Returns "pong" if connected to Revit, or an error if not.
-    After ping succeeds, call read_extension_methods() to load the method catalog.
+    After ping succeeds, read paracore://skills to discover available methods.
     """
-    return "pong — Paracore MCP server connected to Revit. Call read_extension_methods() next."
+    _SESSION.record_ping()
+    return "pong — Paracore MCP server connected to Revit. Read paracore://skills next to discover available methods."
 
 
 @mcp.tool()
@@ -216,21 +237,11 @@ def _search_schema(category_name: str) -> str:
 def _read_extension_methods() -> str:
     """
     Returns the complete Paracore Extension Methods reference (~7,400 chars).
-    Call this BEFORE writing any code — it's the equivalent of reading the
-    docs before coding. This single call loads every method signature, every
-    parameter description, and every usage pattern into context.
+    PREFER reading skill resources instead (skill://{name}/SKILL.md) — they
+    are smaller, operation-specific, and faster to load. Use this tool only
+    when you need the full catalog at once.
 
     Call with NO arguments. Always returns the full catalog.
-
-    Use this FIRST, before explore_revit_data or execute_dynamic_query.
-    Knowing the methods prevents guessing, hallucinated method names,
-    and the raw Revit API patterns that will be rejected.
-
-    OUTPUT: ~7,400 chars of Markdown covering GetStr, GetNum, WhereParam,
-    GroupByParam, Table, Select, SetVal, SetNum, SetParam, CombinedParams,
-    Delete, Hide, BarGraph, PieGraph, LineGraph, and everything else.
-
-    FAILURE: Always available — no network or Revit dependency.
     """
     return read_extension_methods()
 
@@ -238,7 +249,7 @@ def _read_extension_methods() -> str:
 # ── System prompt resource ──────────────────────────────────────────────
 # Prompt content lives in agent/prompts/*.md — single source of truth.
 # Previously: 131-line MCP_SYSTEM_PROMPT inline string + import from agent.prompt.
-# Now: assembled from composable .md files via prompt_assembler.build_prompt("mcp").
+# Now: assembled from composable .md files via prompt_assembler.build_prompt().
 
 _MCP_SYSTEM_PROMPT: str | None = None
 
@@ -249,7 +260,7 @@ def read_system_prompt() -> str:
     global _MCP_SYSTEM_PROMPT
     if _MCP_SYSTEM_PROMPT is not None:
         return _MCP_SYSTEM_PROMPT
-    _MCP_SYSTEM_PROMPT = build_prompt("mcp")
+    _MCP_SYSTEM_PROMPT = build_prompt()
     return _MCP_SYSTEM_PROMPT
 
 
@@ -261,6 +272,14 @@ def read_globals() -> str:
 
 # ── End of inline MCP_SYSTEM_PROMPT replacement ──────────────────────────
 
+
+@mcp.resource("paracore://skills")
+def read_skills_catalog() -> str:
+    """Skill catalog — which skills cover which operations. Read this FIRST to discover what methods are available, then read the specific skill:// resources you need."""
+    global _CACHED_SKILLS
+    path = _get_resource_path("SKILLS.md")
+    _CACHED_SKILLS = _load_resource(path, _CACHED_SKILLS)
+    return _CACHED_SKILLS
 
 @mcp.resource("paracore://repl-guide")
 def read_repl_guide() -> str:
@@ -277,6 +296,37 @@ def read_extension_methods() -> str:
     path = _get_resource_path("EXTENSION_METHODS.md")
     _CACHED_EXTENSION_METHODS = _load_resource(path, _CACHED_EXTENSION_METHODS)
     return _CACHED_EXTENSION_METHODS
+
+# ── Skills — progressive method discovery ─────────────────────────────────
+# Nine operation-based skills. Each is a plain @mcp.resource under skill:// URIs.
+# Pre-loaded at startup, served from RAM. Claude Desktop discovers them automatically.
+
+_SKILL_DESCRIPTIONS: dict[str, str] = {
+    "query-filter":       "Element retrieval, filtering, and sorting — GetElements, WhereParam, WhereMatches, OrderByParam",
+    "aggregate-group":    "Grouping, counting, and summing — GroupByParam, SumParam, aggregated totals",
+    "parameter-access":   "Reading element parameters — GetStr, GetNum, GetVal, GetInt, type-level accessors",
+    "write-modify":       "Modifying elements — SetVal, SetNum, SetParam, Delete, Hide, Isolate, Transact",
+    "display-visualize":  "Rendering data — Table, BarGraph, PieGraph, LineGraph, Println, Select projection",
+    "discovery-debug":    "Exploring unknown elements — CombinedParams, Peek, BuiltInParams, GeometrySummary",
+    "create-geometry":    "Creating new Revit elements — Wall.Create, Floor.Create, XYZ, CurveLoop, InputUnit",
+    "identity-orientation": "Element identity and door/window data — FamilyName, Matches, RoomFrom, Handing",
+    "materials-units":    "Materials, unit conversion, numeric helpers — InputUnit, OutputUnit, IsAlmostEqualTo",
+}
+
+_SKILL_CACHE: dict[str, str] = {}
+
+for _name in _SKILL_DESCRIPTIONS:
+    _path = _get_skill_path(_name) + "/SKILL.md"
+    _SKILL_CACHE[_name] = _load_resource(_path, None)
+
+def _make_skill_resource(name: str, description: str):
+    @mcp.resource(f"skill://{name}/SKILL.md", description=description)
+    def _skill() -> str:
+        return _SKILL_CACHE.get(name, f"Skill not found: {name}")
+    return _skill
+
+for _name, _desc in _SKILL_DESCRIPTIONS.items():
+    _make_skill_resource(_name, _desc)
 
 # Prompts
 @mcp.prompt()

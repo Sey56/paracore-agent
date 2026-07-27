@@ -126,6 +126,49 @@ _ANTI_PATTERNS: list[tuple[str, str]] = [
     ),
 ]
 
+# ── Suspicious Parameter Name Detection ────────────────────────────────────
+# Soft warning only — cross-checks against schema cache before flagging.
+# Real Revit params like "StopDepth", "IfcGUID", "UnderCut" are PascalCase
+# (no spaces, each word capitalized) and must NOT be blocked.
+
+_SUSPICIOUS_NAME_RE = re.compile(r'"([A-Z][^" ]*[a-z][A-Z][^" ]*)"')
+
+
+def check_suspicious_param_names(code: str) -> str:
+    """Find quoted strings that are PascalCase (no spaces) and NOT in the schema cache.
+
+    Returns a warning string if suspicious names are found, or empty string.
+    Does NOT block execution — real params like StopDepth/IfcGUID exist.
+    """
+    suspicious = _SUSPICIOUS_NAME_RE.findall(code)
+    if not suspicious:
+        return ""
+
+    # Cross-check against schema cache — if the name exists in ANY cached
+    # category, it's a real Revit parameter, not a hallucination.
+    try:
+        from mcp_core.schema_cache import _cache as _schema_cache
+        known: set[str] = set()
+        for params in _schema_cache.values():
+            for p in params:
+                known.add(p.get("name", ""))
+    except Exception:
+        known = set()
+
+    unknown = [n for n in suspicious if n not in known]
+
+    if not unknown:
+        return ""
+
+    names = '", "'.join(unknown)
+    return (
+        f"Note: \"{names}\" has no spaces — Revit parameters use spaces "
+        "(e.g., 'Fire Rating' not 'FireRating'). "
+        "If the query returns empty results, verify the exact parameter name with "
+        "_search_schema() or .First().CombinedParams().Table().\n\n"
+    )
+
+
 # ── Dangerous Pattern Detection ──────────────────────────────────────────────
 # Two-tier security guard: BlockedAlways patterns have no legitimate use in any
 # Paracore execution context (process spawn, registry, destructive I/O).
@@ -204,7 +247,7 @@ def check_dangerous_patterns(code: str, agent_only: bool = True) -> Optional[str
     if not issues:
         return None
 
-    msg = "❌ Dangerous pattern detected:\n\n"
+    msg = "Dangerous pattern detected:\n\n"
     for i, issue in enumerate(issues, 1):
         msg += f"{i}. {issue}\n"
     msg += ("\nThese patterns have no legitimate use in Paracore scripts. "
@@ -254,7 +297,7 @@ def check_paracore_compliance(code: str) -> Optional[str]:
     if not issues:
         return None
 
-    msg = "❌ Use Paracore extension methods instead of raw Revit API:\n\n"
+    msg = "Use Paracore extension methods instead of raw Revit API:\n\n"
     for i, issue in enumerate(issues, 1):
         msg += f"{i}. {issue}\n"
     msg += ("\nRead paracore://system-prompt for the complete method catalog. "
@@ -647,6 +690,6 @@ def _suggest_paracore_fix(error_text: str) -> Optional[str]:
     if not suggestions:
         return None
     if len(suggestions) == 1:
-        return f"💡 {suggestions[0]}"
-    return "💡 Possible fixes:\n  1. " + "\n  2. ".join(suggestions)
+        return f"Suggested fix: {suggestions[0]}"
+    return "Possible fixes:\n  1. " + "\n  2. ".join(suggestions)
 

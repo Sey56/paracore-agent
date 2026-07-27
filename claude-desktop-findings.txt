@@ -1,0 +1,62 @@
+Weighed functional success against unresolved underlying code defects
+Weighed functional success against unresolved underlying code defects
+
+Working right now for what we've tested — yes. Both queries just now (GroupByParam("Level"), GroupByParam("Level", "Area", "m2")) ran clean and returned correct live data.
+
+But I'd stop short of calling it "all good" — the underlying bug we found in tool_helpers.py (the camelCase regex at lines 131–134 false-flagging valid parameter names like StopDepth, UnderCut, IfcGUID) hasn't been touched. It just didn't fire on "Level" or "Area", since neither has a lowercase→uppercase letter transition. If you query a parameter that does — any of the Ifc* params, StopDepth, UnderCut, or similar — you'll hit the same false "fabricated parameter name" rejection again.
+
+So: the tool is functionally working, but the bug is still live in the code, just not something today's queries happened to touch. If you want, I can:
+
+Test it against a few more parameter names likely to trip the regex, to map exactly which real Revit params are affected in your schema, or
+Just keep working with queries as they come and flag it live if/when it fires again.
+
+Which would you rather I do?
+
+okay, test the bugs then.
+
+Used paracore integration
+Used paracore integration
+
+Good — full re-test results, and the news is good:
+
+What's fixed
+The session-wide lockout is gone. The exact Println("hello") call that previously got stuck returning the same canned rejection for every query, regardless of content, now executes cleanly and returns hello. Whatever was poisoning the session state earlier is no longer happening.
+The camelCase check is no longer a hard block. Previously it fully rejected the query with "Execution Failed" and no result. Now it runs the query anyway and just prepends an advisory note:
+
+Note: "IfcGUID" looks like it might be camelCase... If the query returns empty results, verify...
+
+Then still returns the real value underneath: 0K2jTdOWX139$XhtZAz1Mr (confirmed correct against CombinedParams()). Same for "StopDepth" and the genuinely fabricated "FireRating" — all now execute and either return real data or an honest empty result, with a note attached rather than a refusal.
+What's still slightly rough
+
+The note still fires on every camelCase-shaped name, valid or not — it just no longer blocks execution, which is the important part. It's now cosmetic noise on a correct query (like IfcGUID) rather than a functional bug. If you want it tighter, the fix would be the same one I flagged before: check the flagged name against _search_schema results before appending the note, so it only fires on names that are actually unconfirmed — but this is now a minor annoyance, not a blocker.
+
+Bottom line
+
+Yes — the generalist Paracore MCP is genuinely working well now. Both bugs I found (the hard false-positive block and the session lockout) are resolved. The room-count and room-area-per-level queries earlier ran clean, and now confirmed-tricky parameter names (IfcGUID, StopDepth, and even a real fake one) all execute correctly instead of failing.
+
+Reconciled Revit's space-separated naming with IFC's PascalCase conventions and exceptions
+Reconciled Revit's space-separated naming with IFC's PascalCase conventions and exceptions
+
+Mostly right, but not 100% — there are two separate categories of exceptions, not just one.
+
+Standard/native Revit parameters: yes, consistently space-separated Title Case — "Fire Rating", "Base Constraint", "Base Offset", "Unconnected Height", etc. That part of the guard's assumption is solid.
+
+But two things break it:
+
+IFC parameters — these follow the buildingSMART/IFC naming standard, not Revit's own convention, so they're PascalCase with no spaces: IfcGUID, IfcName, IfcDescription, IfcExportAs, IfcPropertySetList. (Interestingly "IFC Predefined Type" does have spaces — Revit didn't apply this consistently either, since that one's a Revit-side wrapper, not a raw IFC-mapped field.)
+Family-authored parameters — and this is the one that actually matters more for the bug. StopDepth and UnderCut, which we found on the Doors family in your project, have nothing to do with IFC at all. They're just parameters some family author named without a space, because Revit doesn't enforce a naming convention — it's purely a human convention, not a system rule. Any custom/shared parameter in any family can be named however its author chose.
+
+So the accurate statement isn't "Revit parameters always have spaces, except IFC ones" — it's closer to: native/built-in Revit parameters reliably have spaces, but anything family-authored or standards-imported (IFC being the most common case) can break that convention, and there's no way to know in advance without checking the schema.
+
+That's actually a stronger argument for fixing the regex the way I suggested earlier — rather than trying to special-case "allow IFC-prefixed names," the check should just defer to _search_schema/CombinedParams as the source of truth, since the shape of the string alone can't reliably tell you whether a name is real.
+
+they are pascal case not camel case
+
+Thought for 2s
+Thought for 2s
+
+Correct — my mistake. IfcGUID, StopDepth, UnderCut, FireRating, BaseConstraint — every one of these starts with an uppercase letter, so they're all PascalCase, not camelCase. I used the two terms loosely in that last message when I should have been precise, especially right after we'd just established the distinction.
+
+So the fully accurate version is: Revit's own naming convention for parameters is always space-separated Title Case, and there is no genuine camelCase (lowercase-first) parameter anywhere in Revit. The exceptions that break the "always has spaces" assumption — IFC-mapped fields and family-authored custom parameters — are PascalCase, not camelCase.
+
+Which means the regex and error message in tool_helpers.py have a naming problem on top of the false-positive problem: it's labeled and described as a "camelCase" check throughout (_ANTI_PATTERNS comment, the message text, even the variable framing), but what it's actually pattern-matching for — and what all its own example violations are — is PascalCase-with-an-internal-hump (a second capital appearing after a lowercase run, e.g. Fire+Rating → FireRating). Worth renaming for accuracy if it gets revisited, since "camelCase" is simply the wrong term for what the check does and what it's testing against.

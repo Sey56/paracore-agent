@@ -10,13 +10,14 @@ import, the module fails LOUD at import time — not silently at runtime.
 """
 
 import logging
-from grpc_client import execute_repl, execute_script
+from grpc_client import execute_repl
 
 # ── Security imports — MUST succeed ──────────────────────────────────────
 from mcp_core.tool_helpers import (
     sanitize_csharp_code,
     check_paracore_compliance,
     check_dangerous_patterns,
+    check_suspicious_param_names,
     summarize_execution_result,
     format_execution_error,
     search_extension_methods,
@@ -25,15 +26,45 @@ from mcp_core.tool_helpers import (
 logger = logging.getLogger("paracore-agent")
 
 
+# ── Session state — workflow enforcement ─────────────────────────────────
+# Soft guardrails: _execute_dynamic_query warns if no discovery happened first.
+# Doesn't block — the user may have legitimate reasons to skip discovery.
+# Resets on server restart (module-level state).
+
+class _SessionState:
+    def __init__(self):
+        self.ping_called = False
+        self.discovery_calls = 0       # _explore_revit_data or _search_schema
+        self.modification_calls = 0    # _execute_dynamic_query
+
+    def record_ping(self):            self.ping_called = True
+    def record_discovery(self):       self.discovery_calls += 1
+    def record_modification(self):    self.modification_calls += 1
+
+    def workflow_warning(self) -> str | None:
+        """Return a warning if modification is attempted without prior discovery."""
+        if self.modification_calls > 0 and self.discovery_calls == 0:
+            return (
+                "WORKFLOW WARNING: _execute_dynamic_query called without any "
+                "prior discovery (_explore_revit_data or _search_schema). "
+                "Verify you have the correct parameter names and element counts "
+                "before modifying the model. A bad parameter name returns empty "
+                "results — indistinguishable from 'no matches.'\n\n"
+            )
+        return None
+
+_SESSION = _SessionState()
+
+
 # ── Shared messages ───────────────────────────────────────────────────────
 
 USER_REJECTED_MSG = (
-    "❌ Code execution denied for this Revit session. "
+    "Code execution denied for this Revit session. "
     "Open Revit and approve the one-time session dialog, or restart Revit to reset."
 )
 
 READ_ONLY_VIOLATION_MSG = (
-    "❌ Read-only violation: exploration code contains write operations "
+    "Read-only violation: exploration code contains write operations "
     "(SetVal, Delete, Transact, etc.). Use execute_dynamic_query for writes.\n\n"
     "Error: %s"
 )
@@ -101,11 +132,13 @@ def explore_revit_data(
     if error:
         return error
 
+    param_warning = check_suspicious_param_names(csharp_code)
+    _SESSION.record_discovery()
     logger.info(f"Exploring Revit data: {justification}")
     try:
         result = execute_repl(csharp_code, session_id,
                               execution_mode="read_only", source=source)
-        return handle_execution_result(result)
+        return param_warning + handle_execution_result(result)
     except Exception as e:
         logger.error(f"Exploration exception: {e}")
         return f"Error executing exploration script: {str(e)}"
@@ -135,38 +168,48 @@ def execute_dynamic_query(
 
     DISPLAY: ALWAYS use .Table(). NEVER foreach+Println loops.
     """
+    import re
+
     error = validate_csharp(csharp_code)
     if error:
         return error
+
+    param_warning = check_suspicious_param_names(csharp_code)
+    _SESSION.record_modification()
+
+    # ── Workflow guard: warn if no discovery happened first ──────────────
+    workflow_warning = _SESSION.workflow_warning()
+
+    # ── Bulk write detection ─────────────────────────────────────────────
+    # Collection-level writes affect ALL filtered elements in one transaction.
+    _BULK_PATTERNS = [
+        (r'\.SetParam\s*\(',     '.SetParam() — bulk parameter write on ALL filtered elements'),
+        (r'\.Delete\s*\(',       '.Delete() — bulk delete on ALL filtered elements'),
+        (r'\.Hide\s*\(',         '.Hide() — bulk hide on ALL filtered elements'),
+        (r'\.Isolate\s*\(',      '.Isolate() — bulk isolate on ALL filtered elements'),
+    ]
+    bulk_warnings = []
+    for pattern, desc in _BULK_PATTERNS:
+        if re.search(pattern, csharp_code):
+            bulk_warnings.append(desc)
+    bulk_msg = ""
+    if bulk_warnings:
+        bulk_msg = (
+            "BULK OPERATION DETECTED:\n"
+            + "\n".join(f"  • {w}" for w in bulk_warnings)
+            + "\n\nVerify the filter scope BEFORE proceeding. "
+            + "Use .Count() first to check how many elements will be affected.\n\n"
+        )
+
+    prefix = param_warning + (workflow_warning or "") + bulk_msg
 
     logger.info(f"Executing dynamic query: {justification}")
     try:
         result = execute_repl(csharp_code, session_id, source=source)
-        return handle_execution_result(result)
+        return prefix + handle_execution_result(result)
     except Exception as e:
         logger.error(f"Execution exception: {e}")
-        return f"Error executing task script: {str(e)}"
-
-
-def agent_explore_revit_data(
-    csharp_code: str,
-    justification: str,
-) -> str:
-    """
-    Agent-specific wrapper: same as explore_revit_data but uses execute_script
-    (the agent's gRPC path) and supports ThinkingStep recording via the caller.
-    """
-    error = validate_csharp(csharp_code)
-    if error:
-        return error
-
-    logger.info(f"Agent exploring data: {justification}")
-    try:
-        result = execute_script(csharp_code, "{}", source="paracore_agent")
-        return handle_execution_result(result)
-    except Exception as e:
-        logger.error(f"Agent exploration exception: {e}")
-        return f"Error executing exploration script: {str(e)}"
+        return prefix + f"Error executing task script: {str(e)}"
 
 
 def search_schema(category_name: str) -> str:
@@ -177,6 +220,7 @@ def search_schema(category_name: str) -> str:
     Results are cached in memory after first call per category.
     """
     logger.info(f"Searching schema for: {category_name}")
+    _SESSION.record_discovery()
     try:
         from mcp_core.schema_cache import search_schema as do_search
         result = do_search(category_name)
@@ -256,33 +300,8 @@ FORBIDDEN — these raw Revit API patterns will be REJECTED:
 
 
 def get_globals() -> str:
-    """Return the complete globals + pre-imported namespaces reference."""
-    return """GLOBALS — available in every Paracore script:
-  Doc          → Autodesk.Revit.DB.Document (active document)
-  Uidoc        → Autodesk.Revit.UI.UIDocument
-  UIApp        → Autodesk.Revit.UI.UIApplication
-  ActiveView   → Autodesk.Revit.DB.View (current active view)
-  Selection    → List<Autodesk.Revit.DB.Element> (selected elements)
-
-METHODS — always available (no using needed):
-  Println(string)              → output a line of text
-  Print(string)                → output without newline
-  GetElements<T>()             → typed retrieval (e.g. GetElements<Wall>())
-  GetElements(string)          → category string retrieval
-  GetElement<T>(string)        → single element by name/id
-  GetElement(string)           → single element by name/id
-  GetMagicNames()              → all targetable category/family/class names
-  GetCategories()              → all project category names
-  Transact(string, Action)     → wrap writes in a single undo transaction
-  Table(object)                → render as interactive data grid
-  BarChart(object)             → render bar chart
-  PieChart(object)             → render pie chart
-  LineChart(object)            → render line chart
-
-PRE-IMPORTED NAMESPACES (no using needed):
-  System, System.Linq, System.Collections.Generic
-  Autodesk.Revit.DB, Autodesk.Revit.DB.Architecture
-  Autodesk.Revit.DB.Structure, Autodesk.Revit.DB.Mechanical
-  Autodesk.Revit.DB.Plumbing, Autodesk.Revit.DB.Electrical
-  Autodesk.Revit.UI"""
+    """Return the complete globals + pre-imported namespaces reference.
+    Single source of truth: reads from mcp_core/prompts/globals.md."""
+    from mcp_core.prompt_assembler import get_section
+    return get_section("globals.md")
 
