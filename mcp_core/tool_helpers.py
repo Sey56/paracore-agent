@@ -20,10 +20,12 @@ _TYPE_SUFFIXES = [
 # Each tuple: (regex, suggestion message). Order matters — more specific first.
 
 _ANTI_PATTERNS: list[tuple[str, str]] = [
-    # Display: foreach+Println for data output
+    # Display: foreach+Println for data output — only flag when used
+    # as the PRIMARY display method (3+ Println calls in one loop),
+    # not when used for quick debug checks.
     (
-        r'foreach\s*\(.*\)\s*\{?[^}]*Println',
-        'Use .Select(x => new{...}).Table() instead of foreach+Println to display data.'
+        r'foreach\s*\([^)]*\)\s*\{[^}]*Println[^}]*Println[^}]*Println',
+        'Use .Select(x => new{...}).Table() instead of foreach+Println to display data. Quick debug loops with 1-2 Println calls are fine.'
     ),
     # Display: string.Join with Select for output
     (

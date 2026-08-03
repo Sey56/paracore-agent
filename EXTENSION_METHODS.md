@@ -2,7 +2,7 @@
 
 A comprehensive guide to every extension method available on Revit elements and collections in Paracore scripts. All methods are globally available in the REPL and in all scripts.
 
-Source files: `ElementExtensions.cs`, `ElementParamExtensions.cs`, `ElementWriteExtensions.cs`, `ElementDoorExtensions.cs`, `ElementDiscoveryExtensions.cs`, `ElementGeometryExtensions.cs`, `ElementUIExtensions.cs`, `CollectionAggregateExtensions.cs`, `CollectionWriteExtensions.cs`, `CollectionUIExtensions.cs`, `PipelineEnumerable.cs`, `UnitExtensions.cs`, `NotebookExtensions.cs`, `ScriptApi.cs`.
+Source files: `ElementExtensions.cs`, `ElementParamExtensions.cs`, `ElementWriteExtensions.cs`, `ElementDoorExtensions.cs`, `ElementDiscoveryExtensions.cs`, `ElementGeometryExtensions.cs`, `ElementUIExtensions.cs`, `CollectionAggregateExtensions.cs`, `CollectionWriteExtensions.cs`, `CollectionUIExtensions.cs`, `PipelineEnumerable.cs`, `UnitExtensions.cs`, `CoordinationExtensions.cs`, `NotebookExtensions.cs`, `ScriptApi.cs`, `Eco.cs`.
 
 > [!NOTE]
 > All extension methods work identically in the **REPL** and in **Gallery scripts**. They are standard C# extension methods available everywhere the engine runs.
@@ -52,8 +52,9 @@ Single-element: `GetElement("name-or-id")` | Discovery: `GetMagicNames()`, `GetC
 13. [Collection: Revit UI Actions](#13-collection-revit-ui-actions)
 14. [Collection: Notebook Export](#14-collection-notebook-export)
 15. [Numeric & Unit Helpers](#15-numeric--unit-helpers)
-16. [Global ScriptApi Methods](#16-global-scriptapi-methods)
-17. [Complete Fluent Chain Examples](#17-complete-fluent-chain-examples)
+16. [Coordination & Clash Detection](#16-coordination--clash-detection)
+17. [Global ScriptApi Methods](#17-global-scriptapi-methods)
+18. [Complete Fluent Chain Examples](#18-complete-fluent-chain-examples)
 
 ---
 
@@ -62,14 +63,16 @@ Single-element: `GetElement("name-or-id")` | Discovery: `GetMagicNames()`, `GetC
 ### GetStr — parameter value as string
 
 ```csharp
-// Smart resolution: BuiltInParameter → LookupParameter → C# Property → AsValueString
+// Resolution chain: Level → LookupParameter → BuiltInParameter → C# Property → NativeProperties → Type
 GetElements("Walls").First().GetStr("Comments")        // "North wall"
 GetElements("Walls").First().GetStr("Fire Rating")      // "2 hr"
 GetElements("Walls").First().GetStr("Room Bounding")    // "1" or "0" (yes/no checkbox)
-GetElements("Floors").First().GetStr("Level")           // "Level 1" (ElementId resolved to name)
+GetElements("Walls").First().GetStr("Level")            // "02 - Ground Floor Plan" (via NativeProperties)
 ```
 
-`GetStr` handles String, ElementId (resolves to name), Double/Integer (formatted), and falls back to C# properties via Reflection.
+**"Level" resolution**: GetStr("Level") works on ALL categories. Walls → NativeProperties LevelId, Structural Framing → "Reference Level", Columns → "Base Level", Doors/Windows/Rooms → built-in "Level" parameter. Uses category-specific fallback chain: Reference Level → Base Level → Base Constraint → Native LevelId.
+
+**Unknown parameters**: GetStr returns "" silently (safe for chained queries) but logs a one-time warning: `⚠ GetStr("BadParam"): parameter not found on element. Check spelling or use .CombinedParams().Table() to discover available parameters.`
 
 ### GetNum — parameter value as double
 
@@ -217,6 +220,11 @@ door.IsStandardDoor()                 // true if NOT hosted on a Curtain Wall
 wall.Materials().Table()              // all Material objects on the element
 wall.MaterialNames()                  // IEnumerable<string>: "Concrete - C-25", "Plaster - Cement"
 wall.GetMaterialNames()              // comma-separated string
+
+// Eco (static, not extension methods)
+Eco.GetCarbon(element)                // kgCO2e
+Eco.GetUValue(element)                // W/m²K
+Eco.GetWeather()                      // live Open-Meteo API for project location
 ```
 
 ---
@@ -432,7 +440,27 @@ x.IsPositive() / IsNegative()
 
 ---
 
-## 16. Global ScriptApi Methods
+## 16. Coordination & Clash Detection
+
+```csharp
+// Source collection vs target category
+GetElements("Pipes").AuditClashes("Structural Framing").Table()
+
+// With tolerance
+GetElements<Pipe>("Pipes").AuditClashes("Walls", "2mm").Table()
+
+// Two explicit collections
+sourceElements.AuditClashes(targetElements, 0.01).Table()
+
+// Cleanup
+Doc.ClearClashHelpers()
+```
+
+`.Table()` on clash results renders an interactive table AND creates visual helper geometry in the model.
+
+---
+
+## 17. Global ScriptApi Methods
 
 These are called directly without a prefix — available in every script.
 
@@ -521,5 +549,10 @@ GetElements("Walls")
 GetElements<StructuralColumn>("Structural Columns")
     .WhereParam("Volume", ">", 1.0, "m3")
     .OrderByParamDesc("Volume")
+    .Table()
+
+// Clash pipes against structure
+GetElements("Pipes")
+    .AuditClashes("Structural Framing", "5mm")
     .Table()
 ```

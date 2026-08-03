@@ -25,7 +25,7 @@ from mcp_core.tool_helpers import (
     search_extension_methods,
 )
 
-logger = logging.getLogger("paracore-agent")
+logger = logging.getLogger("paracore-mcp")
 
 
 # ── Session state — workflow enforcement ─────────────────────────────────

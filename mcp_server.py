@@ -9,7 +9,7 @@ if getattr(sys, 'frozen', False):
     if base_dir not in sys.path:
         sys.path.insert(0, base_dir)
 else:
-    # In development mode, mcp_server.py is at paracore-agent root
+    # In development mode, mcp_server.py is at paracore-mcp root
     base_dir = os.path.dirname(os.path.abspath(__file__))
     if base_dir not in sys.path:
         sys.path.insert(0, base_dir)
@@ -20,7 +20,7 @@ def _get_resource_path(filename: str) -> str:
         # PyInstaller extracts --add-data files into sys._MEIPASS
         return os.path.join(sys._MEIPASS, filename)
     else:
-        # Dev mode: docs are alongside mcp_server.py in paracore-agent root
+        # Dev mode: docs are alongside mcp_server.py in paracore-mcp root
         return os.path.join(os.path.dirname(os.path.abspath(__file__)), filename)
 
 import json
@@ -99,13 +99,20 @@ FORBIDDEN — these WILL fail:
   Console.WriteLine()                → use Println()
 
 PARAMETER NAMES — NEVER GUESS:
-  Revit parameters ALWAYS use spaces: "Fire Rating" NOT "FireRating"
-  "Base Constraint" NOT "BaseConstraint", "Top Offset" NOT "TopOffset"
-  If you don't know the EXACT name, discover it first:
-    → _search_schema("Category")  for fast lookup
-    → .First().CombinedParams().Table()  for authoritative list
-  A mistyped name returns empty results — indistinguishable from "no matches."
-  You WILL report wrong answers if you guess. Never fabricate parameter names.
+	  Revit parameters use spaces: "Fire Rating" NOT "FireRating",
+	  "Base Constraint" NOT "BaseConstraint", "Top Offset" NOT "TopOffset"
+
+	  CRITICAL — "Level" is NOT universal. It only works for Rooms, Doors,
+	  Windows. Walls use "Base Constraint". Columns use "Base Level". Beams
+	  and Structural Framing use "Reference Level". GetStr("Level") on a Wall
+	  silently returns empty — no error, just blank. Same for GroupByParam.
+
+	  Discovery BEFORE filtering or grouping:
+	    → _search_schema("Category") for fast schema lookup
+	    → .First().CombinedParams().Table() for live parameter names + values
+	    → .CombinedParams().Table() shows instance, type, AND native params
+	  A mistyped name returns empty — indistinguishable from "no matches."
+	  NEVER guess parameter names. Discover first on the actual category.
 
 START EVERY SESSION WITH:
   1. ping  → confirms connectivity + shows full cheat sheet
